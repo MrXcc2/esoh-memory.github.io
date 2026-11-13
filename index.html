@@ -1,0 +1,2326 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Их именами названы улицы — Интерактивная карта памяти Гатчинского МО</title>
+  <meta name="description" content="Историко-мемориальный проект Гатчинского муниципального округа. Интерактивная карта поселений, улицы и биографии героев." />
+  <meta property="og:title" content="Их именами названы улицы — Карта памяти Гатчинского МО" />
+  <meta property="og:description" content="Интерактивная карта памяти 14 поселений Гатчинского муниципального округа и биографии героев, в честь которых названы улицы." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="./bg-gatchina.jpg" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23DC2626'/%3E%3Cpath fill='%23FFFFFF' d='M16 6l2.9 6.2 6.8.8-5 4.6 1.3 6.7L16 21l-6 3.3 1.3-6.7-5-4.6 6.8-.8z'/%3E%3C/svg%3E" />
+
+  <!-- Шрифты: Playfair Display (с засечками) и Inter (без засечек) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            museum: {
+              bg: '#F8FAFC',
+              text: '#0F172A',
+              accent: '#DC2626',
+            }
+          },
+          fontFamily: {
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans: ['"Inter"', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      background-color: #0F172A;
+      color: #0F172A;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, h4, .font-serif {
+      font-family: 'Playfair Display', Georgia, serif;
+    }
+
+    .memorial-site-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(180deg, rgba(15, 23, 42, 0.72) 0%, rgba(15, 23, 42, 0.56) 45%, rgba(15, 23, 42, 0.82) 100%),
+        radial-gradient(circle at 75% 25%, rgba(220, 38, 38, 0.16), transparent 55%),
+        url('./bg-gatchina.jpg');
+      background-size: cover;
+      background-position: center 25%;
+      background-repeat: no-repeat;
+    }
+
+    .memorial-hero-banner {
+      position: relative;
+      overflow: hidden;
+      background-image:
+        linear-gradient(90deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.74) 46%, rgba(15, 23, 42, 0.18) 100%),
+        linear-gradient(180deg, rgba(15, 23, 42, 0.25) 0%, rgba(15, 23, 42, 0.1) 50%, rgba(15, 23, 42, 0.82) 100%),
+        url('./bg-gatchina.jpg');
+      background-size: cover;
+      background-position: center 28%;
+      background-repeat: no-repeat;
+    }
+
+    .map-viewport-box {
+      position: relative;
+      isolation: isolate;
+      z-index: 10;
+      width: 100%;
+      height: 600px;
+      min-height: 460px;
+    }
+
+    @media (max-width: 640px) {
+      .map-viewport-box {
+        height: 460px;
+      }
+    }
+
+    .museum-map .leaflet-tile-pane {
+      filter: grayscale(75%) contrast(105%);
+    }
+
+    .museum-map.leaflet-container {
+      width: 100% !important;
+      height: 100% !important;
+      background-color: #E2E8F0;
+      font-family: 'Inter', sans-serif;
+      z-index: 10;
+    }
+
+    .leaflet-control-attribution svg,
+    .leaflet-control-attribution {
+      display: none !important;
+    }
+
+    @keyframes pulse-ring {
+      0% {
+        transform: scale(0.8);
+        opacity: 0.85;
+      }
+      70% {
+        transform: scale(2.35);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(2.35);
+        opacity: 0;
+      }
+    }
+
+    @keyframes pulse-ring-active {
+      0% {
+        transform: scale(0.9);
+        opacity: 0.95;
+      }
+      70% {
+        transform: scale(2.9);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(2.9);
+        opacity: 0;
+      }
+    }
+
+    .memorial-marker-wrapper {
+      background: transparent !important;
+      border: none !important;
+    }
+
+    .memorial-pin {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .memorial-pin::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background-color: rgba(220, 38, 38, 0.45);
+      animation: pulse-ring 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+
+    .memorial-pin-dot {
+      position: relative;
+      z-index: 2;
+      width: 14px;
+      height: 14px;
+      border-radius: 9999px;
+      background-color: #DC2626;
+      border: 2.5px solid #FFFFFF;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+      transition: all 0.25s ease;
+    }
+
+    .memorial-pin.is-hovered {
+      transform: scale(1.38);
+      z-index: 999 !important;
+    }
+
+    .memorial-pin.is-hovered::before {
+      background-color: rgba(220, 38, 38, 0.75);
+      animation: pulse-ring-active 1.3s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+
+    .memorial-pin.is-hovered .memorial-pin-dot {
+      background-color: #B91C1C;
+      border-color: #FEF2F2;
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.28), 0 4px 12px rgba(15, 23, 42, 0.45);
+    }
+
+    .leaflet-tooltip.memorial-tooltip {
+      background-color: #0F172A;
+      color: #F8FAFC;
+      border: 1px solid rgba(220, 38, 38, 0.65);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.35);
+    }
+
+    .leaflet-tooltip-top.memorial-tooltip::before {
+      border-top-color: #0F172A;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React 18, ReactDOM 18, Framer Motion, Leaflet, Supabase JS, QRCode Generator, Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/framer-motion@10.18.0/dist/framer-motion.js" crossorigin></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin></script>
+  <script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef, useCallback } = React;
+    const MotionLib = window.Motion || {};
+    const motion = MotionLib.motion || {
+      div: (props) => <div {...props} />,
+      article: (props) => <article {...props} />
+    };
+    const AnimatePresence = MotionLib.AnimatePresence || (({ children }) => <>{children}</>);
+
+    // ==========================================
+    // 1. КОНФИГУРАЦИЯ КЛИЕНТА SUPABASE И ЗАЩИТА SHA-256
+    // ==========================================
+    const DEFAULT_SUPABASE_URL = 'https://wvhswxdjwddncquytffe.supabase.co';
+    const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_tS70v5fzehoR5V6tgCv7mg_SRjgoZmw';
+
+    // 5000-раундовый солёный SHA-256 хеш пароля администратора (сам пароль в коде НЕ хранится)
+    const ADMIN_SALTED_SHA256_HASH = '4029d53e35c8393922746cd7b57f71b7747df6152002969abe9e98f7cbae1841';
+    const ADMIN_HASH_SALT = 'gatchina_memorial_pbkdf_v2:';
+
+    function rotr(x, n) {
+      return ((x >>> n) | (x << (32 - n))) >>> 0;
+    }
+
+    function sha256Hex(msgStr) {
+      const K = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+      ];
+      const H = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+      ];
+      const utf8 = unescape(encodeURIComponent(String(msgStr)));
+      const bytes = [];
+      for (let i = 0; i < utf8.length; i++) {
+        bytes.push(utf8.charCodeAt(i) & 0xff);
+      }
+      const bitLen = bytes.length * 8;
+      bytes.push(0x80);
+      while ((bytes.length % 64) !== 56) {
+        bytes.push(0);
+      }
+      const hiBits = Math.floor(bitLen / 0x100000000);
+      const loBits = bitLen >>> 0;
+      bytes.push((hiBits >>> 24) & 0xff, (hiBits >>> 16) & 0xff, (hiBits >>> 8) & 0xff, hiBits & 0xff);
+      bytes.push((loBits >>> 24) & 0xff, (loBits >>> 16) & 0xff, (loBits >>> 8) & 0xff, loBits & 0xff);
+
+      for (let chunk = 0; chunk < bytes.length; chunk += 64) {
+        const W = new Array(64).fill(0);
+        for (let i = 0; i < 16; i++) {
+          const j = chunk + i * 4;
+          W[i] = (((bytes[j] << 24) | (bytes[j + 1] << 16) | (bytes[j + 2] << 8) | bytes[j + 3]) >>> 0);
+        }
+        for (let i = 16; i < 64; i++) {
+          const s0 = (rotr(W[i - 15], 7) ^ rotr(W[i - 15], 18) ^ (W[i - 15] >>> 3)) >>> 0;
+          const s1 = (rotr(W[i - 2], 17) ^ rotr(W[i - 2], 19) ^ (W[i - 2] >>> 10)) >>> 0;
+          W[i] = (W[i - 16] + s0 + W[i - 7] + s1) >>> 0;
+        }
+        let [a, b, c, d, e, f, g, h] = H;
+        for (let i = 0; i < 64; i++) {
+          const S1 = (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) >>> 0;
+          const ch = ((e & f) ^ ((~e >>> 0) & g)) >>> 0;
+          const temp1 = (h + S1 + ch + K[i] + W[i]) >>> 0;
+          const S0 = (rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) >>> 0;
+          const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
+          const temp2 = (S0 + maj) >>> 0;
+          h = g;
+          g = f;
+          f = e;
+          e = (d + temp1) >>> 0;
+          d = c;
+          c = b;
+          b = a;
+          a = (temp1 + temp2) >>> 0;
+        }
+        H[0] = (H[0] + a) >>> 0;
+        H[1] = (H[1] + b) >>> 0;
+        H[2] = (H[2] + c) >>> 0;
+        H[3] = (H[3] + d) >>> 0;
+        H[4] = (H[4] + e) >>> 0;
+        H[5] = (H[5] + f) >>> 0;
+        H[6] = (H[6] + g) >>> 0;
+        H[7] = (H[7] + h) >>> 0;
+      }
+      return H.map((x) => x.toString(16).padStart(8, '0')).join('');
+    }
+
+    function verifyAdminPasswordHash(inputPassword) {
+      if (!inputPassword) return false;
+      let h = ADMIN_HASH_SALT + String(inputPassword).trim();
+      for (let i = 0; i < 5000; i++) {
+        h = sha256Hex(h);
+      }
+      return h === ADMIN_SALTED_SHA256_HASH;
+    }
+
+    function normalizeSupabaseUrl(rawUrl) {
+      if (!rawUrl) return '';
+      return String(rawUrl)
+        .trim()
+        .replace(/\/rest\/v1\/?.*$/i, '')
+        .replace(/\/+$/, '');
+    }
+
+    function getSupabaseCredentials() {
+      const rawSavedUrl = localStorage.getItem('gatchina_supabase_url') || '';
+      const rawSavedKey = localStorage.getItem('gatchina_supabase_key') || '';
+      const validSavedUrl =
+        rawSavedUrl && !rawSavedUrl.includes('YOUR_PROJECT_ID') && rawSavedUrl.startsWith('https://')
+          ? rawSavedUrl
+          : '';
+      const validSavedKey =
+        rawSavedKey && !rawSavedKey.includes('YOUR_SUPABASE_ANON_PUBLIC_KEY')
+          ? rawSavedKey
+          : '';
+
+      const url = normalizeSupabaseUrl(validSavedUrl || DEFAULT_SUPABASE_URL);
+      const anonKey = (validSavedKey || DEFAULT_SUPABASE_ANON_KEY).trim();
+
+      const isConfigured =
+        Boolean(url && anonKey) &&
+        !url.includes('YOUR_PROJECT_ID') &&
+        !anonKey.includes('YOUR_SUPABASE_ANON_PUBLIC_KEY') &&
+        url.startsWith('https://');
+
+      return { url, anonKey, isConfigured };
+    }
+
+    let supabaseInstance = null;
+    let currentClientUrl = '';
+    let currentClientKey = '';
+
+    function getSupabaseClient() {
+      const { url, anonKey, isConfigured } = getSupabaseCredentials();
+      if (!isConfigured || !window.supabase) return null;
+      if (!supabaseInstance || currentClientUrl !== url || currentClientKey !== anonKey) {
+        supabaseInstance = window.supabase.createClient(url, anonKey);
+        currentClientUrl = url;
+        currentClientKey = anonKey;
+      }
+      return supabaseInstance;
+    }
+
+    const SUPABASE_SQL_SCHEMA = `-- См. полный защищённый скрипт в файле supabase_schema.sql
+create table if not exists public.heroes (
+  id uuid primary key default gen_random_uuid(),
+  settlement_id text not null,
+  full_name text not null,
+  years text not null default '',
+  street text not null,
+  rank text default '',
+  biography text not null,
+  photo text default '',
+  created_at timestamptz not null default now()
+);
+
+alter table public.heroes enable row level security;
+drop policy if exists "Anon can insert heroes" on public.heroes;
+drop policy if exists "Anon can update heroes" on public.heroes;
+drop policy if exists "Anon can delete heroes" on public.heroes;
+drop policy if exists "Public can read heroes" on public.heroes;
+create policy "Public can read heroes" on public.heroes for select to anon, authenticated using (true);`;
+
+    function normalizeHeroRow(row) {
+      return {
+        id: String(row.id),
+        settlementId: row.settlement_id || row.settlementId || 'gatchina',
+        fullName: row.full_name || row.fullName || '',
+        years: row.years || '',
+        street: row.street || '',
+        rank: row.rank || '',
+        biography: row.biography || '',
+        photo: row.photo || '',
+        createdAt: row.created_at || row.createdAt || null
+      };
+    }
+
+    // ==========================================
+    // 2. ТОЧНЫЕ КООРДИНАТЫ 14 ПОСЕЛЕНИЙ ГАТЧИНСКОГО МО
+    // ==========================================
+    const SETTLEMENTS = [
+      {
+        id: 'gatchina',
+        name: 'Гатчина',
+        shortName: 'г. Гатчина',
+        type: 'Административный центр округа',
+        coords: [59.5667, 30.1333],
+        description: 'Город воинской славы, исторический и культурный центр Гатчинского муниципального округа.'
+      },
+      {
+        id: 'kommunar',
+        name: 'Коммунар',
+        shortName: 'г. Коммунар',
+        type: 'Городское поселение',
+        coords: [59.6206, 30.3950],
+        description: 'Город на реке Ижоре с богатыми промышленными и военно-историческими традициями.'
+      },
+      {
+        id: 'vyritsa',
+        name: 'Вырица',
+        shortName: 'г.п. Вырица',
+        type: 'Городское поселение',
+        coords: [59.4108, 30.3469],
+        description: 'Исторический дачный и лесной край на берегах реки Оредеж, край партизанской славы.'
+      },
+      {
+        id: 'bolshekolpanskoe',
+        name: 'Большеколпанское сельское поселение (Большие Колпаны)',
+        shortName: 'Большие Колпаны',
+        type: 'Сельское поселение',
+        coords: [59.5336, 30.0681],
+        description: 'Поселение у южных рубежей Гатчины, место ожесточённых оборонительных боёв 1941 года.'
+      },
+      {
+        id: 'verevskoe',
+        name: 'Веревское сельское поселение (Малое Верево)',
+        shortName: 'Малое Верево',
+        type: 'Сельское поселение',
+        coords: [59.6150, 30.2008],
+        description: 'Северные ворота Гатчинского округа на Киевском шоссе, рубеж обороны подступов к Ленинграду.'
+      },
+      {
+        id: 'voiskovitskoe',
+        name: 'Войсковицкое сельское поселение (Войсковицы)',
+        shortName: 'Войсковицы',
+        type: 'Сельское поселение',
+        coords: [59.5322, 29.9553],
+        description: 'Место легендарного танкового боя роты старшего лейтенанта З. Г. Колобанова в августе 1941 года.'
+      },
+      {
+        id: 'druzhnogorskoe',
+        name: 'Дружногорское сельское поселение (Дружная Горка)',
+        shortName: 'Дружная Горка',
+        type: 'Сельское поселение',
+        coords: [59.2800, 30.1322],
+        description: 'Старинный центр художественного и химико-лабораторного стеклоделия на юге округа.'
+      },
+      {
+        id: 'elizavetinskoe',
+        name: 'Елизаветинское сельское поселение (Елизаветино)',
+        shortName: 'Елизаветино',
+        type: 'Сельское поселение',
+        coords: [59.4958, 29.7847],
+        description: 'Историческое поселение на западе Гатчинского округа, хранящее память об освободителях 1944 года.'
+      },
+      {
+        id: 'kobrinskoe',
+        name: 'Кобринское сельское поселение (Кобринское)',
+        shortName: 'Кобринское',
+        type: 'Сельское поселение',
+        coords: [59.4339, 30.1239],
+        description: 'Пушкинский уголок Гатчинской земли (Кобрино, Суйда) и место ратного подвига воинов.'
+      },
+      {
+        id: 'pudostskoe',
+        name: 'Пудостьское сельское поселение (Пудость)',
+        shortName: 'Пудость',
+        type: 'Сельское поселение',
+        coords: [59.6225, 30.0689],
+        description: 'Край знаменитого пудостского камня на реке Ижоре к северо-западу от Гатчины.'
+      },
+      {
+        id: 'rozhdestvenskoe',
+        name: 'Рождественское сельское поселение (Рождествено)',
+        shortName: 'Рождествено',
+        type: 'Сельское поселение',
+        coords: [59.3228, 29.9467],
+        description: 'Историческое село на реке Оредеж, литературный и мемориальный заповедник.'
+      },
+      {
+        id: 'siverskoe',
+        name: 'Сиверское сельское поселение (Сиверский)',
+        shortName: 'Сиверский',
+        type: 'Сельское поселение',
+        coords: [59.3567, 30.0789],
+        description: 'Знаменитая «Сиверская дачная столица» и военный авиагарнизон с героической историей.'
+      },
+      {
+        id: 'susaninskoe',
+        name: 'Сусанинское сельское поселение (Сусанино)',
+        shortName: 'Сусанино',
+        type: 'Сельское поселение',
+        coords: [59.5008, 30.3461],
+        description: 'Поселение на востоке округа, где бережно хранят память о защитниках Ленинградской земли.'
+      },
+      {
+        id: 'taitskoe',
+        name: 'Таицкое сельское поселение (Тайцы)',
+        shortName: 'Тайцы',
+        type: 'Сельское поселение',
+        coords: [59.6606, 30.1114],
+        description: 'Посёлок у Демидовской усадьбы и Таицких ключей, освобождённый в январе 1944 года.'
+      }
+    ];
+
+    const MAP_CENTER = [59.4500, 30.1500];
+    const MAP_ZOOM = 10;
+    const TILE_URL = 'https://tile{s}.maps.2gis.com/tiles?x={x}&y={y}&z={z}&v=1';
+    const TILE_SUBDOMAINS = ['0', '1', '2', '3'];
+
+    // ==========================================
+    // 3. ИКОНКИ SVG И ГЕНЕРАТОР QR-КОДОВ
+    // ==========================================
+    const IconMapPin = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+        <circle cx="12" cy="10" r="3" />
+      </svg>
+    );
+
+    const IconSearch = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.3-4.3" />
+      </svg>
+    );
+
+    const IconArrowLeft = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m12 19-7-7 7-7" />
+        <path d="M19 12H5" />
+      </svg>
+    );
+
+    const IconChevronRight = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m9 18 6-6-6-6" />
+      </svg>
+    );
+
+    const IconLock = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+    );
+
+    const IconUnlock = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+      </svg>
+    );
+
+    const IconPlus = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+      </svg>
+    );
+
+    const IconEdit = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    );
+
+    const IconTrash = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 6h18" />
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      </svg>
+    );
+
+    const IconDownload = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" x2="12" y1="15" y2="3" />
+      </svg>
+    );
+
+    const IconUpload = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" x2="12" y1="3" y2="15" />
+      </svg>
+    );
+
+    const IconX = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </svg>
+    );
+
+    const IconAward = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="6" />
+        <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+      </svg>
+    );
+
+    const IconCalendar = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+        <line x1="16" x2="16" y1="2" y2="6" />
+        <line x1="8" x2="8" y1="2" y2="6" />
+        <line x1="3" x2="21" y1="10" y2="10" />
+      </svg>
+    );
+
+    const IconDatabase = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <ellipse cx="12" cy="5" rx="9" ry="3" />
+        <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+        <path d="M3 12A9 3 0 0 0 21 12" />
+      </svg>
+    );
+
+    const IconRefresh = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+        <path d="M21 3v5h-5" />
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+        <path d="M8 16H3v5" />
+      </svg>
+    );
+
+    const IconQrCode = ({ className = "w-4 h-4" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="5" height="5" x="3" y="3" rx="1" />
+        <rect width="5" height="5" x="16" y="3" rx="1" />
+        <rect width="5" height="5" x="3" y="16" rx="1" />
+        <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
+        <path d="M21 21v.01" />
+        <path d="M12 7v3a2 2 0 0 1-2 2H7" />
+        <path d="M3 12h.01" />
+        <path d="M12 3h.01" />
+        <path d="M12 16v.01" />
+        <path d="M16 12h1" />
+        <path d="M21 12v.01" />
+        <path d="M12 21v-1" />
+      </svg>
+    );
+
+    function downloadQrCodePng(targetUrl, fileName) {
+      if (typeof window.qrcode !== 'function') {
+        alert('Библиотека генерации QR-кода ещё загружается. Повторите через секунду.');
+        return;
+      }
+      const qr = window.qrcode(0, 'M');
+      qr.addData(targetUrl);
+      qr.make();
+
+      const moduleCount = qr.getModuleCount();
+      const size = 1024;
+      const marginModules = 4;
+      const totalModules = moduleCount + marginModules * 2;
+      const cellSize = size / totalModules;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, size, size);
+
+      ctx.fillStyle = '#0F172A';
+      for (let r = 0; r < moduleCount; r++) {
+        for (let c = 0; c < moduleCount; c++) {
+          if (qr.isDark(r, c)) {
+            const x = Math.floor((c + marginModules) * cellSize);
+            const y = Math.floor((r + marginModules) * cellSize);
+            const w = Math.ceil((c + marginModules + 1) * cellSize) - x;
+            const h = Math.ceil((r + marginModules + 1) * cellSize) - y;
+            ctx.fillRect(x, y, w, h);
+          }
+        }
+      }
+
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = fileName.endsWith('.png') ? fileName : `${fileName}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // ==========================================
+    // 4. КОМПОНЕНТ ИНТЕРАКТИВНОЙ КАРТЫ LEAFLET
+    // ==========================================
+    function GatchinaLeafletMap({
+      settlements,
+      hoveredSettlementId,
+      onHoverSettlement,
+      onSelectSettlement,
+      heroCountBySettlement
+    }) {
+      const mapContainerRef = useRef(null);
+      const mapInstanceRef = useRef(null);
+      const markersRef = useRef({});
+
+      useEffect(() => {
+        if (!mapContainerRef.current || mapInstanceRef.current) return;
+
+        const map = L.map(mapContainerRef.current, {
+          center: MAP_CENTER,
+          zoom: MAP_ZOOM,
+          scrollWheelZoom: true,
+          attributionControl: false
+        });
+
+        L.tileLayer(TILE_URL, {
+          subdomains: TILE_SUBDOMAINS,
+          maxZoom: 18,
+          keepBuffer: 4,
+          updateWhenIdle: false
+        }).addTo(map);
+
+        mapInstanceRef.current = map;
+
+        settlements.forEach((s) => {
+          const count = heroCountBySettlement[s.id] || 0;
+          const icon = L.divIcon({
+            className: 'memorial-marker-wrapper',
+            html: `<div class="memorial-pin" id="pin-${s.id}"><div class="memorial-pin-dot"></div></div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+            tooltipAnchor: [0, -14]
+          });
+
+          const marker = L.marker(s.coords, { icon }).addTo(map);
+          marker.bindTooltip(
+            `<div style="text-align:center;">
+              <div style="font-weight:600;color:#fff;">${s.name}</div>
+              <div style="font-size:11px;color:#FCA5A5;">Героев: ${count} • Нажмите для перехода</div>
+            </div>`,
+            {
+              direction: 'top',
+              offset: [0, -10],
+              opacity: 1,
+              className: 'memorial-tooltip'
+            }
+          );
+
+          marker.on('mouseover', () => onHoverSettlement(s.id));
+          marker.on('mouseout', () => onHoverSettlement(null));
+          marker.on('click', () => onSelectSettlement(s.id));
+
+          markersRef.current[s.id] = marker;
+        });
+
+        const refreshMapSize = () => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize({ pan: false });
+          }
+        };
+
+        refreshMapSize();
+        const t1 = setTimeout(refreshMapSize, 100);
+        const t2 = setTimeout(refreshMapSize, 350);
+        const t3 = setTimeout(refreshMapSize, 800);
+
+        let resizeObserver = null;
+        if (window.ResizeObserver && mapContainerRef.current) {
+          resizeObserver = new ResizeObserver(() => {
+            refreshMapSize();
+          });
+          resizeObserver.observe(mapContainerRef.current);
+        }
+
+        return () => {
+          clearTimeout(t1);
+          clearTimeout(t2);
+          clearTimeout(t3);
+          if (resizeObserver) resizeObserver.disconnect();
+          map.remove();
+          mapInstanceRef.current = null;
+        };
+      }, []);
+
+      useEffect(() => {
+        settlements.forEach((s) => {
+          const marker = markersRef.current[s.id];
+          if (marker) {
+            const count = heroCountBySettlement[s.id] || 0;
+            marker.setTooltipContent(
+              `<div style="text-align:center;">
+                <div style="font-weight:600;color:#fff;">${s.name}</div>
+                <div style="font-size:11px;color:#FCA5A5;">Героев: ${count} • Нажмите для перехода</div>
+              </div>`
+            );
+          }
+        });
+      }, [heroCountBySettlement, settlements]);
+
+      useEffect(() => {
+        settlements.forEach((s) => {
+          const marker = markersRef.current[s.id];
+          if (!marker) return;
+          const isHovered = hoveredSettlementId === s.id;
+          const icon = L.divIcon({
+            className: 'memorial-marker-wrapper',
+            html: `<div class="memorial-pin ${isHovered ? 'is-hovered' : ''}"><div class="memorial-pin-dot"></div></div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+            tooltipAnchor: [0, -14]
+          });
+          marker.setIcon(icon);
+          marker.setZIndexOffset(isHovered ? 1000 : 0);
+          if (isHovered) {
+            marker.openTooltip();
+          } else {
+            marker.closeTooltip();
+          }
+        });
+      }, [hoveredSettlementId, settlements]);
+
+      return <div ref={mapContainerRef} className="museum-map w-full h-full" />;
+    }
+
+    // ==========================================
+    // 5. МУЗЕЙНАЯ ЗАГЛУШКА ПОРТРЕТА ГЕРОЯ
+    // ==========================================
+    function HeroPortraitPlaceholder({ fullName, large = false }) {
+      const initials = useMemo(() => {
+        if (!fullName) return '★';
+        const parts = fullName.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return parts[0][0].toUpperCase();
+      }, [fullName]);
+
+      return (
+        <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-slate-100 select-none">
+          <div
+            className="absolute inset-0 opacity-10"
+            style={{
+              backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.6) 1px, transparent 0)',
+              backgroundSize: '20px 20px'
+            }}
+          />
+          <div className="absolute inset-3 border border-slate-700/70 pointer-events-none flex flex-col justify-between p-2">
+            <div className="flex justify-between text-[10px] text-red-500/80">
+              <span>✦</span>
+              <span>✦</span>
+            </div>
+            <div className="flex justify-between text-[10px] text-red-500/80">
+              <span>✦</span>
+              <span>✦</span>
+            </div>
+          </div>
+
+          <div className="relative z-10 flex flex-col items-center">
+            <div
+              className={`flex items-center justify-center rounded-full border border-red-600/50 bg-slate-900/90 shadow-inner ${
+                large ? 'w-24 h-24 mb-4' : 'w-16 h-16 mb-2.5'
+              }`}
+            >
+              <span className={`font-serif font-semibold tracking-wider text-slate-100 ${large ? 'text-3xl' : 'text-xl'}`}>
+                {initials}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-red-500 text-xs tracking-[0.2em] uppercase font-medium">
+              <span>★</span>
+              <span>Архив памяти</span>
+              <span>★</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 6. ГЛАВНЫЙ КОМПОНЕНТ ПРИЛОЖЕНИЯ
+    // ==========================================
+    function App() {
+      const [currentView, setCurrentView] = useState('map');
+      const [selectedSettlementId, setSelectedSettlementId] = useState(null);
+      const [selectedHeroId, setSelectedHeroId] = useState(null);
+      const [hoveredSettlementId, setHoveredSettlementId] = useState(null);
+
+      const [settlementSearch, setSettlementSearch] = useState('');
+      const [heroSearch, setHeroSearch] = useState('');
+
+      const [heroes, setHeroes] = useState([]);
+      const [isLoadingHeroes, setIsLoadingHeroes] = useState(true);
+      const [isSavingHero, setIsSavingHero] = useState(false);
+      const [dbError, setDbError] = useState('');
+
+      const [dbConfigVersion, setDbConfigVersion] = useState(0);
+      const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+      const [supabaseUrlInput, setSupabaseUrlInput] = useState(() => getSupabaseCredentials().url);
+      const [supabaseKeyInput, setSupabaseKeyInput] = useState(() => getSupabaseCredentials().anonKey);
+
+      const [adminSessionKey, setAdminSessionKey] = useState(
+        () => sessionStorage.getItem('gatchina_admin_session_key') || ''
+      );
+      const [isAdmin, setIsAdmin] = useState(
+        () => verifyAdminPasswordHash(sessionStorage.getItem('gatchina_admin_session_key') || '')
+      );
+      const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+      const [passwordInput, setPasswordInput] = useState('');
+      const [loginError, setLoginError] = useState('');
+
+      const [isEditorModalOpen, setIsEditorModalOpen] = useState(false);
+      const [editingHero, setEditingHero] = useState(null);
+      const [formState, setFormState] = useState({
+        settlementId: SETTLEMENTS[0].id,
+        fullName: '',
+        years: '',
+        street: '',
+        rank: '',
+        photo: '',
+        biography: ''
+      });
+
+      const [toast, setToast] = useState(null);
+      const fileInputRef = useRef(null);
+
+      const showToast = useCallback((message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3500);
+      }, []);
+
+      // Загрузка списка героев из облачной БД Supabase
+      const fetchHeroesFromCloud = useCallback(async () => {
+        const client = getSupabaseClient();
+        if (!client) {
+          setIsLoadingHeroes(false);
+          setDbError('Не указаны ключи подключения к Supabase');
+          return;
+        }
+
+        setIsLoadingHeroes(true);
+        setDbError('');
+        try {
+          const { data, error } = await client
+            .from('heroes')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (error) throw error;
+          setHeroes((data || []).map(normalizeHeroRow));
+        } catch (err) {
+          console.error('Ошибка загрузки из Supabase:', err);
+          setDbError(err.message || 'Ошибка подключения к таблице heroes');
+        } finally {
+          setIsLoadingHeroes(false);
+        }
+      }, []);
+
+      // Подписка на изменения в реальном времени (Supabase Realtime)
+      useEffect(() => {
+        fetchHeroesFromCloud();
+
+        const client = getSupabaseClient();
+        if (!client) return;
+
+        const channel = client
+          .channel('public:heroes')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'heroes' },
+            () => {
+              fetchHeroesFromCloud();
+            }
+          )
+          .subscribe();
+
+        return () => {
+          client.removeChannel(channel);
+        };
+      }, [fetchHeroesFromCloud, dbConfigVersion]);
+
+      const heroCountBySettlement = useMemo(() => {
+        const counts = {};
+        SETTLEMENTS.forEach((s) => (counts[s.id] = 0));
+        heroes.forEach((h) => {
+          if (counts[h.settlementId] !== undefined) counts[h.settlementId] += 1;
+        });
+        return counts;
+      }, [heroes]);
+
+      const filteredSettlements = useMemo(() => {
+        const q = settlementSearch.trim().toLowerCase();
+        if (!q) return SETTLEMENTS;
+        return SETTLEMENTS.filter(
+          (s) =>
+            s.name.toLowerCase().includes(q) ||
+            s.shortName.toLowerCase().includes(q) ||
+            s.description.toLowerCase().includes(q)
+        );
+      }, [settlementSearch]);
+
+      const currentSettlement = useMemo(
+        () => SETTLEMENTS.find((s) => s.id === selectedSettlementId) || null,
+        [selectedSettlementId]
+      );
+
+      const currentHero = useMemo(
+        () => heroes.find((h) => String(h.id) === String(selectedHeroId)) || null,
+        [heroes, selectedHeroId]
+      );
+
+      const settlementHeroes = useMemo(() => {
+        if (!selectedSettlementId) return [];
+        const q = heroSearch.trim().toLowerCase();
+        return heroes.filter((h) => {
+          if (h.settlementId !== selectedSettlementId) return false;
+          if (!q) return true;
+          return (
+            h.fullName.toLowerCase().includes(q) ||
+            h.street.toLowerCase().includes(q) ||
+            (h.rank && h.rank.toLowerCase().includes(q))
+          );
+        });
+      }, [heroes, selectedSettlementId, heroSearch]);
+
+      const handleSelectSettlement = (settlementId) => {
+        setSelectedSettlementId(settlementId);
+        setHeroSearch('');
+        setCurrentView('settlement');
+        window.location.hash = `#/settlement/${settlementId}`;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleSelectHero = (heroId) => {
+        const targetHero = heroes.find((h) => String(h.id) === String(heroId));
+        const sId = targetHero ? targetHero.settlementId : selectedSettlementId;
+        if (sId) setSelectedSettlementId(sId);
+        setSelectedHeroId(String(heroId));
+        setCurrentView('hero');
+        window.location.hash = `#/settlement/${sId}/hero/${heroId}`;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleBackToMap = () => {
+        setCurrentView('map');
+        setSelectedHeroId(null);
+        if (window.location.hash) {
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleBackToSettlement = () => {
+        setCurrentView('settlement');
+        setSelectedHeroId(null);
+        if (selectedSettlementId) {
+          window.location.hash = `#/settlement/${selectedSettlementId}`;
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      useEffect(() => {
+        const syncFromHash = () => {
+          const hash = window.location.hash || '';
+          const heroMatch = hash.match(/^#\/settlement\/([^/]+)\/hero\/([^/]+)$/);
+          if (heroMatch) {
+            const sId = decodeURIComponent(heroMatch[1]);
+            const hId = decodeURIComponent(heroMatch[2]);
+            if (SETTLEMENTS.some((s) => s.id === sId)) {
+              setSelectedSettlementId(sId);
+              setSelectedHeroId(hId);
+              setCurrentView('hero');
+              return;
+            }
+          }
+          const settlementMatch = hash.match(/^#\/settlement\/([^/]+)$/);
+          if (settlementMatch) {
+            const sId = decodeURIComponent(settlementMatch[1]);
+            if (SETTLEMENTS.some((s) => s.id === sId)) {
+              setSelectedSettlementId(sId);
+              setSelectedHeroId(null);
+              setCurrentView('settlement');
+              return;
+            }
+          }
+        };
+        syncFromHash();
+        window.addEventListener('hashchange', syncFromHash);
+        return () => window.removeEventListener('hashchange', syncFromHash);
+      }, []);
+
+      const handleDownloadSettlementQR = (settlement) => {
+        const baseUrl = window.location.href.split('#')[0];
+        const targetUrl = `${baseUrl}#/settlement/${encodeURIComponent(settlement.id)}`;
+        const safeName = settlement.id.replace(/[^a-z0-9_-]/gi, '_');
+        downloadQrCodePng(targetUrl, `qr-settlement-${safeName}.png`);
+        showToast('QR-код поселения скачан (PNG)');
+      };
+
+      const handleDownloadHeroQR = (hero) => {
+        const baseUrl = window.location.href.split('#')[0];
+        const targetUrl = `${baseUrl}#/settlement/${encodeURIComponent(hero.settlementId)}/hero/${encodeURIComponent(hero.id)}`;
+        const safeName = hero.fullName.trim().replace(/\s+/g, '_');
+        downloadQrCodePng(targetUrl, `qr-hero-${safeName}.png`);
+        showToast('QR-код героя скачан (PNG)');
+      };
+
+      const handleAdminLogin = async (e) => {
+        e.preventDefault();
+        const candidate = passwordInput.trim();
+        if (!verifyAdminPasswordHash(candidate)) {
+          setLoginError('Неверный пароль.');
+          return;
+        }
+
+        const client = getSupabaseClient();
+        if (client) {
+          const { data: rpcOk, error: rpcErr } = await client.rpc('verify_admin_password', {
+            p_admin_key: candidate
+          });
+          if (!rpcErr && rpcOk === false) {
+            setLoginError('Сервер отклонил пароль администратора.');
+            return;
+          }
+        }
+
+        sessionStorage.setItem('gatchina_admin_session_key', candidate);
+        setAdminSessionKey(candidate);
+        setIsAdmin(true);
+        setIsLoginModalOpen(false);
+        setPasswordInput('');
+        setLoginError('');
+        showToast('Доступ открыт');
+      };
+
+      const handleAdminLogout = () => {
+        sessionStorage.removeItem('gatchina_admin_session_key');
+        setAdminSessionKey('');
+        setIsAdmin(false);
+      };
+
+      const handleSaveSupabaseConfig = (e) => {
+        e.preventDefault();
+        localStorage.setItem('gatchina_supabase_url', supabaseUrlInput.trim());
+        localStorage.setItem('gatchina_supabase_key', supabaseKeyInput.trim());
+        setDbConfigVersion((v) => v + 1);
+        setIsDbModalOpen(false);
+        showToast('Настройки Supabase сохранены');
+      };
+
+      const openAddHeroModal = (defaultSettlementId = null) => {
+        setEditingHero(null);
+        setFormState({
+          settlementId: defaultSettlementId || selectedSettlementId || SETTLEMENTS[0].id,
+          fullName: '',
+          years: '',
+          street: '',
+          rank: '',
+          photo: '',
+          biography: ''
+        });
+        setIsEditorModalOpen(true);
+      };
+
+      const openEditHeroModal = (hero, e) => {
+        if (e) e.stopPropagation();
+        setEditingHero(hero);
+        setFormState({
+          settlementId: hero.settlementId,
+          fullName: hero.fullName,
+          years: hero.years,
+          street: hero.street,
+          rank: hero.rank || '',
+          photo: hero.photo || '',
+          biography: hero.biography
+        });
+        setIsEditorModalOpen(true);
+      };
+
+      const handlePhotoUpload = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormState((prev) => ({ ...prev, photo: reader.result }));
+        };
+        reader.readAsDataURL(file);
+      };
+
+      // Мгновенное сохранение (INSERT / UPDATE) в базу данных Supabase
+      const handleSaveHero = async (e) => {
+        e.preventDefault();
+        if (!formState.fullName.trim() || !formState.street.trim() || !formState.biography.trim()) {
+          showToast('Заполните обязательные поля: ФИО, улица и биография', 'error');
+          return;
+        }
+
+        const client = getSupabaseClient();
+        if (!client) {
+          showToast('Сначала укажите ключи Supabase в «Настройки Supabase»', 'error');
+          setIsDbModalOpen(true);
+          return;
+        }
+
+        setIsSavingHero(true);
+        const payload = {
+          settlement_id: formState.settlementId,
+          full_name: formState.fullName.trim(),
+          years: formState.years.trim() || 'Годы неизвестны',
+          street: formState.street.trim(),
+          rank: formState.rank.trim(),
+          photo: formState.photo.trim(),
+          biography: formState.biography.trim()
+        };
+
+        try {
+          const { data: rpcData, error: rpcError } = await client.rpc('admin_save_hero', {
+            p_admin_key: adminSessionKey,
+            p_id: editingHero ? editingHero.id : null,
+            p_settlement_id: payload.settlement_id,
+            p_full_name: payload.full_name,
+            p_years: payload.years,
+            p_street: payload.street,
+            p_rank: payload.rank,
+            p_biography: payload.biography,
+            p_photo: payload.photo
+          });
+
+          if (!rpcError && rpcData) {
+            const savedHero = normalizeHeroRow(rpcData);
+            if (editingHero) {
+              setHeroes((prev) =>
+                prev.map((h) => (String(h.id) === String(editingHero.id) ? savedHero : h))
+              );
+              showToast('Карточка обновлена в облаке Supabase');
+            } else {
+              setHeroes((prev) => [savedHero, ...prev]);
+              showToast('Карточка добавлена в облаке Supabase');
+            }
+          } else if (rpcError && (rpcError.code === 'PGRST202' || String(rpcError.message).includes('admin_save_hero'))) {
+            if (editingHero) {
+              const { data, error } = await client
+                .from('heroes')
+                .update(payload)
+                .eq('id', editingHero.id)
+                .select()
+                .single();
+
+              if (error) throw error;
+              const updated = normalizeHeroRow(data);
+              setHeroes((prev) =>
+                prev.map((h) => (String(h.id) === String(editingHero.id) ? updated : h))
+              );
+              showToast('Карточка обновлена в облаке Supabase');
+            } else {
+              const { data, error } = await client
+                .from('heroes')
+                .insert([payload])
+                .select()
+                .single();
+
+              if (error) throw error;
+              const inserted = normalizeHeroRow(data);
+              setHeroes((prev) => [inserted, ...prev]);
+              showToast('Карточка добавлена в облако Supabase');
+            }
+          } else if (rpcError) {
+            throw rpcError;
+          }
+          setIsEditorModalOpen(false);
+        } catch (err) {
+          console.error('Ошибка записи в Supabase:', err);
+          showToast(`Ошибка Supabase: ${err.message}`, 'error');
+        } finally {
+          setIsSavingHero(false);
+        }
+      };
+
+      // Мгновенное удаление (DELETE) из базы данных Supabase
+      const handleDeleteHero = async (heroId, e) => {
+        if (e) e.stopPropagation();
+        const target = heroes.find((h) => String(h.id) === String(heroId));
+        if (!target) return;
+        if (!window.confirm(`Удалить карточку «${target.fullName}» из базы данных Supabase?`)) {
+          return;
+        }
+
+        const client = getSupabaseClient();
+        if (!client) {
+          showToast('Нет подключения к Supabase', 'error');
+          return;
+        }
+
+        try {
+          const { error: rpcError } = await client.rpc('admin_delete_hero', {
+            p_admin_key: adminSessionKey,
+            p_id: heroId
+          });
+
+          if (rpcError && (rpcError.code === 'PGRST202' || String(rpcError.message).includes('admin_delete_hero'))) {
+            const { error } = await client.from('heroes').delete().eq('id', heroId);
+            if (error) throw error;
+          } else if (rpcError) {
+            throw rpcError;
+          }
+
+          setHeroes((prev) => prev.filter((h) => String(h.id) !== String(heroId)));
+          if (String(selectedHeroId) === String(heroId)) {
+            setCurrentView('settlement');
+            setSelectedHeroId(null);
+          }
+          showToast('Карточка удалена из Supabase');
+        } catch (err) {
+          console.error('Ошибка удаления из Supabase:', err);
+          showToast(`Ошибка удаления: ${err.message}`, 'error');
+        }
+      };
+
+      const handleExportJSON = () => {
+        const dataStr = JSON.stringify(heroes, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        link.href = url;
+        link.download = `gatchina-memory-db-${date}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showToast('Резервная копия JSON скачана');
+      };
+
+      const handleImportJSON = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const parsed = JSON.parse(event.target.result);
+            if (!Array.isArray(parsed)) throw new Error('Некорректный формат');
+            const client = getSupabaseClient();
+            if (!client) throw new Error('Сначала настройте подключение к Supabase');
+
+            const rows = parsed.map((item) => ({
+              settlement_id: item.settlement_id || item.settlementId || SETTLEMENTS[0].id,
+              full_name: item.full_name || item.fullName || 'Без имени',
+              years: item.years || '',
+              street: item.street || '',
+              rank: item.rank || '',
+              biography: item.biography || '',
+              photo: item.photo || ''
+            }));
+
+            const { error: rpcError } = await client.rpc('admin_import_heroes', {
+              p_admin_key: adminSessionKey,
+              p_heroes: rows
+            });
+
+            if (rpcError && (rpcError.code === 'PGRST202' || String(rpcError.message).includes('admin_import_heroes'))) {
+              const { error } = await client.from('heroes').insert(rows);
+              if (error) throw error;
+            } else if (rpcError) {
+              throw rpcError;
+            }
+            await fetchHeroesFromCloud();
+            showToast(`Импортировано в Supabase: ${rows.length}`);
+          } catch (err) {
+            showToast(`Ошибка импорта: ${err.message}`, 'error');
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+      };
+
+      const { isConfigured: isSupabaseConfigured } = getSupabaseCredentials();
+
+      return (
+        <div className="relative min-h-screen flex flex-col bg-slate-950 text-[#0F172A]">
+          {/* ИСТОРИЧЕСКИЙ ФОН САЙТА */}
+          <div className="memorial-site-bg" aria-hidden="true" />
+
+          {/* ВЕРХНЯЯ ШАПКА */}
+          <header className="sticky top-0 z-[1100] bg-slate-950/80 backdrop-blur-xl border-b border-white/15">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+              <button
+                onClick={handleBackToMap}
+                className="flex items-center gap-3 text-left group focus:outline-none"
+              >
+                <div className="w-9 h-9 rounded-full bg-[#DC2626] text-white flex items-center justify-center shadow-md shadow-red-950/50 group-hover:bg-red-700 transition-colors">
+                  <IconAward className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="block text-[11px] uppercase tracking-[0.2em] text-red-400 font-semibold">
+                    Мемориальный проект
+                  </span>
+                  <span className="font-serif font-bold text-base sm:text-lg text-white tracking-tight">
+                    Их именами названы улицы
+                  </span>
+                </div>
+              </button>
+
+              <div className="flex items-center gap-3">
+                {currentView !== 'map' && (
+                  <button
+                    onClick={handleBackToMap}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium border border-white/20 bg-white/10 text-white hover:bg-[#DC2626] hover:border-[#DC2626] transition-colors"
+                  >
+                    <IconMapPin className="w-4 h-4 text-red-400" />
+                    <span>Назад к карте</span>
+                  </button>
+                )}
+
+                {isAdmin && (
+                  <button
+                    onClick={() => openAddHeroModal(selectedSettlementId)}
+                    className="inline-flex items-center gap-1.5 text-xs bg-[#DC2626] hover:bg-red-700 text-white px-3.5 py-2 rounded-full font-semibold shadow-sm transition-colors"
+                  >
+                    <IconPlus className="w-3.5 h-3.5" />
+                    <span>Добавить героя</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* ПАНЕЛЬ УПРАВЛЕНИЯ АДМИНИСТРАТОРА */}
+            {isAdmin && (
+              <div className="bg-slate-900 text-slate-100 border-b border-slate-800">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <IconUnlock className="w-4 h-4 text-red-500" />
+                      <span>Supabase Cloud ({heroes.length})</span>
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] ${
+                        isSupabaseConfigured && !dbError
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                          : 'bg-amber-950 text-amber-300 border border-amber-800'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isSupabaseConfigured && !dbError ? 'bg-emerald-400' : 'bg-amber-400'
+                        }`}
+                      />
+                      {isSupabaseConfigured && !dbError ? 'Облако подключено' : 'Требуется настройка БД'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => openAddHeroModal(selectedSettlementId)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#DC2626] hover:bg-red-700 text-white font-medium transition-colors"
+                    >
+                      <IconPlus className="w-3.5 h-3.5" />
+                      <span>Добавить героя</span>
+                    </button>
+                    <button
+                      onClick={fetchHeroesFromCloud}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+                      title="Обновить из облака"
+                    >
+                      <IconRefresh className={`w-3.5 h-3.5 ${isLoadingHeroes ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                      onClick={handleExportJSON}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition-colors"
+                    >
+                      <IconDownload className="w-3.5 h-3.5 text-red-400" />
+                      <span>Экспорт JSON</span>
+                    </button>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition-colors"
+                    >
+                      <IconUpload className="w-3.5 h-3.5 text-red-400" />
+                      <span>Импорт JSON</span>
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      onChange={handleImportJSON}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={handleAdminLogout}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-slate-400 hover:text-white transition-colors"
+                    >
+                      <IconX className="w-3.5 h-3.5" />
+                      <span>Выйти</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </header>
+
+          {/* ОСНОВНОЙ КОНТЕНТ */}
+          <main className="relative z-10 flex-1">
+            <AnimatePresence mode="wait">
+              {currentView === 'map' && (
+                <motion.div
+                  key="view-map"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10"
+                >
+                  {/* ПАНОРАМНЫЙ МЕМОРИАЛЬНЫЙ БАННЕР С ИСТОРИЧЕСКОЙ ФОТОГРАФИЕЙ */}
+                  <div className="memorial-hero-banner rounded-3xl border border-white/20 shadow-2xl p-6 sm:p-10 lg:p-12 mb-8 sm:mb-10 min-h-[270px] sm:min-h-[340px] flex flex-col justify-end">
+                    <div className="relative z-10 max-w-2xl">
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-600/25 backdrop-blur-md border border-red-400/40 text-red-200 text-xs font-semibold uppercase tracking-widest mb-4">
+                        <span className="w-2 h-2 rounded-full bg-[#DC2626] animate-pulse" />
+                        <span>Гатчинский муниципальный округ</span>
+                      </div>
+                      <h1 className="font-serif text-3xl sm:text-5xl lg:text-[54px] font-bold text-white leading-[1.1] tracking-tight mb-3 drop-shadow-md">
+                        Их именами названы улицы
+                      </h1>
+                      <p className="text-base sm:text-xl text-slate-200 font-normal leading-relaxed drop-shadow">
+                        Интерактивная карта памяти Гатчинского муниципального округа
+                      </p>
+                      <div className="mt-5 h-1 w-24 bg-[#DC2626] rounded-full shadow-lg shadow-red-600/50" />
+                    </div>
+
+                    <div className="mt-6 sm:mt-0 sm:absolute sm:bottom-4 sm:right-6 z-10">
+                      <span className="inline-block px-3 py-1 rounded-full bg-slate-950/75 backdrop-blur-md border border-white/15 text-[11px] text-slate-300 tracking-wide">
+                        Знамя над освобождённой Гатчиной • 26 января 1944 г.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+                    {/* КАРТА */}
+                    <div className="lg:col-span-8 bg-white/95 backdrop-blur-md rounded-2xl border border-white/70 shadow-2xl overflow-hidden">
+                      <div className="px-5 py-3.5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/60">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-700">
+                          <IconMapPin className="w-4 h-4 text-[#DC2626]" />
+                          <span>Карта Гатчинского муниципального округа (14 поселений)</span>
+                        </div>
+                        <span className="text-xs text-slate-500">
+                          Выберите поселение на карте или в списке
+                        </span>
+                      </div>
+
+                      <div className="map-viewport-box">
+                        <GatchinaLeafletMap
+                          settlements={SETTLEMENTS}
+                          hoveredSettlementId={hoveredSettlementId}
+                          onHoverSettlement={setHoveredSettlementId}
+                          onSelectSettlement={handleSelectSettlement}
+                          heroCountBySettlement={heroCountBySettlement}
+                        />
+                      </div>
+                    </div>
+
+                    {/* САЙДБАР СПИСКА 14 ПОСЕЛЕНИЙ */}
+                    <aside className="lg:col-span-4 bg-white/95 backdrop-blur-md rounded-2xl border border-white/70 shadow-2xl flex flex-col h-[520px] sm:h-[600px] lg:h-[653px] overflow-hidden">
+                      <div className="p-5 border-b border-slate-100">
+                        <div className="flex items-center justify-between mb-3">
+                          <h2 className="font-serif text-xl font-bold text-slate-900">
+                            Поселения округа
+                          </h2>
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+                            {filteredSettlements.length} из {SETTLEMENTS.length}
+                          </span>
+                        </div>
+
+                        <div className="relative">
+                          <IconSearch className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={settlementSearch}
+                            onChange={(e) => setSettlementSearch(e.target.value)}
+                            placeholder="Поиск поселения..."
+                            className="w-full pl-10 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#DC2626] focus:bg-white transition-colors"
+                          />
+                          {settlementSearch && (
+                            <button
+                              onClick={() => setSettlementSearch('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                              <IconX className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+                        {filteredSettlements.map((settlement, idx) => {
+                          const isHovered = hoveredSettlementId === settlement.id;
+                          const count = heroCountBySettlement[settlement.id] || 0;
+                          return (
+                            <button
+                              key={settlement.id}
+                              onMouseEnter={() => setHoveredSettlementId(settlement.id)}
+                              onMouseLeave={() => setHoveredSettlementId(null)}
+                              onClick={() => handleSelectSettlement(settlement.id)}
+                              className={`w-full text-left px-5 py-3.5 flex items-center justify-between gap-3 transition-all ${
+                                isHovered
+                                  ? 'bg-red-50/90 pl-6 border-l-4 border-l-[#DC2626]'
+                                  : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-mono text-slate-400">
+                                    {String(idx + 1).padStart(2, '0')}
+                                  </span>
+                                  <span
+                                    className={`font-medium text-sm truncate ${
+                                      isHovered ? 'text-[#DC2626] font-semibold' : 'text-slate-900'
+                                    }`}
+                                  >
+                                    {settlement.name}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 truncate mt-0.5 pl-6">
+                                  {settlement.type}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                    count > 0
+                                      ? 'bg-red-100 text-red-700'
+                                      : 'bg-slate-100 text-slate-500'
+                                  }`}
+                                >
+                                  {count}
+                                </span>
+                                <IconChevronRight
+                                  className={`w-4 h-4 ${
+                                    isHovered ? 'text-[#DC2626]' : 'text-slate-400'
+                                  }`}
+                                />
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <span>Всего карточек в архиве:</span>
+                        <span className="font-semibold text-slate-900">
+                          {isLoadingHeroes ? '...' : heroes.length}
+                        </span>
+                      </div>
+                    </aside>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* СТРАНИЦА ПОСЕЛЕНИЯ */}
+              {currentView === 'settlement' && currentSettlement && (
+                <motion.div
+                  key="view-settlement"
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -14 }}
+                  transition={{ duration: 0.3 }}
+                  className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12"
+                >
+                  <div className="mb-8">
+                    <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+                      <button
+                        onClick={handleBackToMap}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/80 hover:bg-[#DC2626] text-white border border-white/15 backdrop-blur-md text-sm font-medium shadow-md transition-colors group"
+                      >
+                        <IconArrowLeft className="w-4 h-4" />
+                        <span>Назад к карте</span>
+                      </button>
+
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDownloadSettlementQR(currentSettlement)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-semibold text-slate-800 hover:border-[#DC2626] hover:text-[#DC2626] shadow-sm transition-colors"
+                        >
+                          <IconQrCode className="w-4 h-4 text-[#DC2626]" />
+                          <span>Скачать QR-код</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+                      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                        <div>
+                          <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-[#DC2626] font-semibold mb-2">
+                            <IconMapPin className="w-3.5 h-3.5" />
+                            <span>{currentSettlement.type}</span>
+                          </div>
+                          <h1 className="font-serif text-2xl sm:text-4xl font-bold text-slate-900 mb-2">
+                            {currentSettlement.name}
+                          </h1>
+                          <p className="text-sm sm:text-base text-slate-600 max-w-2xl">
+                            {currentSettlement.description}
+                          </p>
+                        </div>
+
+                        <div className="w-full md:w-80 shrink-0">
+                          <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                            Поиск по ФИО героя или улице
+                          </label>
+                          <div className="relative">
+                            <IconSearch className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                              type="text"
+                              value={heroSearch}
+                              onChange={(e) => setHeroSearch(e.target.value)}
+                              placeholder="Введите ФИО или название улицы..."
+                              className="w-full pl-10 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#DC2626] focus:bg-white transition-colors"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {isLoadingHeroes ? (
+                    <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center max-w-xl mx-auto my-6">
+                      <IconRefresh className="w-7 h-7 text-[#DC2626] animate-spin mx-auto mb-3" />
+                      <p className="text-sm text-slate-600">Загрузка архивных данных...</p>
+                    </div>
+                  ) : settlementHeroes.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center max-w-xl mx-auto my-6">
+                      <h3 className="font-serif text-xl font-bold text-slate-900 mb-2">
+                        {heroSearch
+                          ? 'По вашему запросу ничего не найдено'
+                          : 'Раздел находится в стадии наполнения'}
+                      </h3>
+                      <p className="text-sm text-slate-600">
+                        {heroSearch
+                          ? 'Попробуйте изменить параметры поиска.'
+                          : 'Архивные материалы по данному поселению подготавливаются к публикации.'}
+                      </p>
+                      {isAdmin && (
+                        <button
+                          onClick={() => openAddHeroModal(currentSettlement.id)}
+                          className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#DC2626] text-white text-sm font-medium hover:bg-red-700 transition-colors"
+                        >
+                          <IconPlus className="w-4 h-4" />
+                          <span>Добавить карточку героя</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {settlementHeroes.map((hero) => (
+                        <article
+                          key={hero.id}
+                          onClick={() => handleSelectHero(hero.id)}
+                          className="group cursor-pointer bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md hover:border-red-300 transition-all flex flex-col"
+                        >
+                          <div className="relative h-64 w-full bg-slate-900 overflow-hidden">
+                            {hero.photo ? (
+                              <img
+                                src={hero.photo}
+                                alt={hero.fullName}
+                                className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                              />
+                            ) : (
+                              <HeroPortraitPlaceholder fullName={hero.fullName} />
+                            )}
+
+                            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 text-white text-xs font-medium border border-white/15">
+                                <IconMapPin className="w-3.5 h-3.5 text-[#DC2626]" />
+                                <span className="truncate">{hero.street}</span>
+                              </span>
+                            </div>
+
+                            {isAdmin && (
+                              <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20">
+                                <button
+                                  onClick={(e) => openEditHeroModal(hero, e)}
+                                  className="p-2 rounded-full bg-white/95 text-slate-800 hover:bg-[#DC2626] hover:text-white shadow transition-colors"
+                                  title="Редактировать"
+                                >
+                                  <IconEdit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => handleDeleteHero(hero.id, e)}
+                                  className="p-2 rounded-full bg-white/95 text-red-600 hover:bg-red-600 hover:text-white shadow transition-colors"
+                                  title="Удалить"
+                                >
+                                  <IconTrash className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="p-6 flex-1 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#DC2626] mb-1.5">
+                                <IconCalendar className="w-3.5 h-3.5" />
+                                <span>{hero.years}</span>
+                              </div>
+                              <h2 className="font-serif text-xl font-bold text-slate-900 group-hover:text-[#DC2626] transition-colors mb-2">
+                                {hero.fullName}
+                              </h2>
+                              {hero.rank && (
+                                <p className="text-xs text-slate-500 line-clamp-2 mb-3">{hero.rank}</p>
+                              )}
+                              <p className="text-sm text-slate-600 line-clamp-3 leading-relaxed">
+                                {hero.biography}
+                              </p>
+                            </div>
+
+                            <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-800 group-hover:text-[#DC2626]">
+                              <span>Открыть биографию</span>
+                              <IconChevronRight className="w-4 h-4" />
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* СТРАНИЦА ГЕРОЯ */}
+              {currentView === 'hero' && currentHero && (
+                <motion.div
+                  key="view-hero"
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -14 }}
+                  transition={{ duration: 0.3 }}
+                  className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                    <button
+                      onClick={handleBackToSettlement}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/80 hover:bg-[#DC2626] text-white border border-white/15 backdrop-blur-md text-sm font-medium shadow-md transition-colors"
+                    >
+                      <IconArrowLeft className="w-4 h-4" />
+                      <span>Назад к списку героев</span>
+                    </button>
+
+                    {isAdmin && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => handleDownloadHeroQR(currentHero)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-800 hover:border-[#DC2626] hover:text-[#DC2626] shadow-sm transition-colors"
+                        >
+                          <IconQrCode className="w-4 h-4 text-[#DC2626]" />
+                          <span>Скачать QR-код</span>
+                        </button>
+                        <button
+                          onClick={(e) => openEditHeroModal(currentHero, e)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-800 hover:border-[#DC2626] hover:text-[#DC2626] transition-colors"
+                        >
+                          <IconEdit className="w-3.5 h-3.5" />
+                          <span>Редактировать</span>
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteHero(currentHero.id, e)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-200 bg-red-50 text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white transition-colors"
+                        >
+                          <IconTrash className="w-3.5 h-3.5" />
+                          <span>Удалить</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <article className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="grid grid-cols-1 md:grid-cols-12">
+                      <div className="md:col-span-5 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 p-6 sm:p-8 flex flex-col">
+                        <div className="aspect-[4/5] w-full rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-900 mb-6">
+                          {currentHero.photo ? (
+                            <img
+                              src={currentHero.photo}
+                              alt={currentHero.fullName}
+                              className="w-full h-full object-cover object-top"
+                            />
+                          ) : (
+                            <HeroPortraitPlaceholder fullName={currentHero.fullName} large={true} />
+                          )}
+                        </div>
+
+                        <div className="space-y-4 bg-white rounded-2xl p-5 border border-slate-200/80">
+                          <div>
+                            <span className="block text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+                              Годы жизни
+                            </span>
+                            <span className="font-serif text-lg font-bold text-slate-900">
+                              {currentHero.years}
+                            </span>
+                          </div>
+                          <div className="border-t border-slate-100 pt-3">
+                            <span className="block text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+                              Поселение
+                            </span>
+                            <span className="text-sm font-medium text-slate-800">
+                              {SETTLEMENTS.find((s) => s.id === currentHero.settlementId)?.name}
+                            </span>
+                          </div>
+                          <div className="border-t border-slate-100 pt-3">
+                            <span className="block text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+                              Улица
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-[#DC2626] mt-0.5">
+                              <IconMapPin className="w-4 h-4" />
+                              <span>{currentHero.street}</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-7 p-6 sm:p-10 lg:p-12 flex flex-col justify-between">
+                        <div>
+                          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-50 text-[#DC2626] text-xs font-semibold uppercase tracking-widest mb-4">
+                            <span>Биография и подвиг</span>
+                          </div>
+
+                          <h1 className="font-serif text-2xl sm:text-4xl font-bold text-slate-900 leading-tight mb-3">
+                            {currentHero.fullName}
+                          </h1>
+
+                          {currentHero.rank && (
+                            <p className="text-sm sm:text-base font-medium text-slate-600 mb-6 pb-6 border-b border-slate-200">
+                              {currentHero.rank}
+                            </p>
+                          )}
+
+                          <div className="space-y-4 text-slate-700 text-base leading-relaxed whitespace-pre-line">
+                            {currentHero.biography}
+                          </div>
+                        </div>
+
+                        <div className="mt-10 pt-6 border-t border-slate-200 flex items-center justify-between">
+                          <button
+                            onClick={handleBackToSettlement}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-colors"
+                          >
+                            <IconArrowLeft className="w-4 h-4" />
+                            <span>Вернуться к списку</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </main>
+
+          {/* ФУТЕР: только иконка замка без подписей */}
+          <footer className="relative z-10 bg-slate-950/85 backdrop-blur-xl border-t border-white/15 mt-16">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-300">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full bg-[#DC2626]" />
+                <span>
+                  © {new Date().getFullYear()} «Их именами названы улицы» — Интерактивная карта памяти Гатчинского муниципального округа
+                </span>
+              </div>
+
+              <div>
+                {isAdmin ? (
+                  <button
+                    onClick={handleAdminLogout}
+                    className="p-2 rounded-lg text-red-400 hover:bg-white/10 transition-colors"
+                    aria-label="Выйти"
+                  >
+                    <IconUnlock className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setIsLoginModalOpen(true);
+                      setLoginError('');
+                      setPasswordInput('');
+                    }}
+                    className="p-2 rounded-lg text-slate-500 hover:text-slate-200 transition-colors"
+                    aria-label="Авторизация"
+                  >
+                    <IconLock className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </footer>
+
+          {/* МОДАЛЬНОЕ ОКНО ВВОДА ПАРОЛЯ */}
+          {isLoginModalOpen && (
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-sm w-full p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-red-50 text-[#DC2626] flex items-center justify-center">
+                      <IconLock className="w-4 h-4" />
+                    </div>
+                    <h3 className="font-serif text-lg font-bold text-slate-900">Авторизация</h3>
+                  </div>
+                  <button
+                    onClick={() => setIsLoginModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <IconX className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAdminLogin} className="space-y-4">
+                  <div>
+                    <input
+                      type="password"
+                      autoFocus
+                      value={passwordInput}
+                      onChange={(e) => {
+                        setPasswordInput(e.target.value);
+                        setLoginError('');
+                      }}
+                      placeholder="Пароль..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-[#DC2626]"
+                    />
+                    {loginError && <p className="mt-2 text-xs text-red-600">{loginError}</p>}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsLoginModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-xl text-sm font-semibold bg-[#DC2626] text-white hover:bg-red-700"
+                    >
+                      Войти
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* МОДАЛЬНОЕ ОКНО НАСТРОЙКИ SUPABASE */}
+          {isDbModalOpen && (
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full p-6 sm:p-8 my-8 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
+                  <div className="flex items-center gap-2.5">
+                    <IconDatabase className="w-5 h-5 text-[#DC2626]" />
+                    <h3 className="font-serif text-xl font-bold text-slate-900">
+                      Подключение к облачной БД Supabase
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setIsDbModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <IconX className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                      Project URL (Supabase URL) *
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      value={supabaseUrlInput}
+                      onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                      placeholder="https://xxxxxxxxxxxx.supabase.co"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                      Anon Public Key (SUPABASE_ANON_KEY) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={supabaseKeyInput}
+                      onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono"
+                    />
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-slate-700">
+                        SQL-скрипт для создания таблицы heroes в Supabase SQL Editor:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+                          showToast('SQL-скрипт скопирован');
+                        }}
+                        className="text-xs font-semibold text-[#DC2626] hover:underline"
+                      >
+                        Скопировать SQL
+                      </button>
+                    </div>
+                    <pre className="text-[11px] font-mono bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto max-h-40">
+                      {SUPABASE_SQL_SCHEMA}
+                    </pre>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-3 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setIsDbModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100"
+                    >
+                      Закрыть
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-xl text-sm font-semibold bg-[#DC2626] text-white hover:bg-red-700"
+                    >
+                      Сохранить и подключить
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* МОДАЛЬНОЕ ОКНО СОЗДАНИЯ / РЕДАКТИРОВАНИЯ ГЕРОЯ */}
+          {isEditorModalOpen && (
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full p-6 sm:p-8 my-8 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
+                  <h3 className="font-serif text-2xl font-bold text-slate-900">
+                    {editingHero ? 'Редактирование карточки героя' : 'Добавление нового героя'}
+                  </h3>
+                  <button
+                    onClick={() => setIsEditorModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <IconX className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveHero} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                      Поселение (из 14 поселений округа) *
+                    </label>
+                    <select
+                      value={formState.settlementId}
+                      onChange={(e) =>
+                        setFormState((prev) => ({ ...prev, settlementId: e.target.value }))
+                      }
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white"
+                    >
+                      {SETTLEMENTS.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                        ФИО героя *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formState.fullName}
+                        onChange={(e) =>
+                          setFormState((prev) => ({ ...prev, fullName: e.target.value }))
+                        }
+                        placeholder="Введите ФИО героя"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                        Годы жизни *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formState.years}
+                        onChange={(e) =>
+                          setFormState((prev) => ({ ...prev, years: e.target.value }))
+                        }
+                        placeholder="Например: 1915 — 1944"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                        Название улицы *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formState.street}
+                        onChange={(e) =>
+                          setFormState((prev) => ({ ...prev, street: e.target.value }))
+                        }
+                        placeholder="Введите название улицы"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                        Воинское звание / статус
+                      </label>
+                      <input
+                        type="text"
+                        value={formState.rank}
+                        onChange={(e) =>
+                          setFormState((prev) => ({ ...prev, rank: e.target.value }))
+                        }
+                        placeholder="Необязательное поле"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                      Фотография (прямая ссылка URL или загрузка файла Base64)
+                    </label>
+                    <input
+                      type="text"
+                      value={formState.photo}
+                      onChange={(e) =>
+                        setFormState((prev) => ({ ...prev, photo: e.target.value }))
+                      }
+                      placeholder="https://... (или выберите файл ниже)"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs mb-2"
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      className="block w-full text-xs text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-red-50 file:text-[#DC2626] hover:file:bg-red-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                      Биография и подвиг *
+                    </label>
+                    <textarea
+                      rows={6}
+                      required
+                      value={formState.biography}
+                      onChange={(e) =>
+                        setFormState((prev) => ({ ...prev, biography: e.target.value }))
+                      }
+                      placeholder="Текст биографии и история подвига..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditorModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingHero}
+                      className="px-6 py-2 rounded-xl text-sm font-semibold bg-[#DC2626] text-white hover:bg-red-700 disabled:opacity-60"
+                    >
+                      {isSavingHero ? 'Сохранение в облако...' : 'Сохранить в Supabase'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* УВЕДОМЛЕНИЕ */}
+          {toast && (
+            <div className="fixed bottom-5 right-5 z-[2100] bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg text-xs sm:text-sm">
+              {toast.message}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
